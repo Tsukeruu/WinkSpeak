@@ -1,8 +1,12 @@
 from utils.Classes import Initialize
+from typing import List, Dict, Any, Union, Tuple
 
 class Main(Initialize):
-    def __init__(self) -> None:
-        super().__init__()
+    def initial_checks(self) -> None:
         super().import_check()
+    
+    def run(self) -> None:
+        self.initial_checks()
 
 app = Main()
+app.run()
