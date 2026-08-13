@@ -25,6 +25,7 @@ class Initialize:
         self.DECODED_TEXT: str = ""
 
         #FORMAT (MEDIAPIPE) = [left_corner,top_left,top_right,right_corner,bottom_right,bottom_left]
+        #These landmarks are crucial for our later calculation in 'landmarks' they represenet the specific points, a needle, in a haystack
         self.LEFT_EYE: List[int] = [33, 160, 158, 133, 153, 144]
         self.RIGHT_EYE: List[int] = [362, 385, 387, 263, 373, 380]
 
@@ -73,10 +74,41 @@ class Main_methods(Initialize):
         self.task_path: str = self.stored_libraries["pathlib"].Path(__file__).parent / "face_landmarker.task" 
 
         self.final_options = self.face_landmarker_options(
-                base_options=self.base_options(model_asset_path=self.task_path),
+                base_options=self.base_options(model_asset_path=str(self.task_path)),
                 running_mode=self.visionrunningmode.IMAGE,
                 num_faces=1
             )
        
     def main_webcam(self) -> None:
-       pass 
+        with self.face_landmarker.create_from_options(self.final_options) as landmarker:
+            while self.capture.isOpened():
+                s, f = self.capture.read() #gives us success, frame as return values, frame being the frame of webcam, s indicating success
+
+                if not s: 
+                    break
+
+                f = self.stored_libraries["cv2"].flip(f,1) #re adjusts the frame to mirror differently (as in looking at the mirror)
+                h, w, _ = f.shape #returns height and width from the frame
+
+                #Mediapipe expects coloros in rgb, cv2 returns it in bgr, the line below converts the frame to rgb format
+                rgb_frame = self.stored_libraries["cv2"].cvtColor(f, self.stored_libraries["cv2"].COLOR_BGR2RGB)
+                mp_image = self.stored_libraries["mediapipe"].Image(image_format=self.stored_libraries["mediapipe"].ImageFormat.SRGB, data=rgb_frame)
+                result = landmarker.detect(mp_image)
+                
+                if result.face_landmarks:
+                    self.landmarks: List[int] = result.face_landmarks[0]
+                    
+                    #This uses landmarks' normalized values which is 0.0-1.0, from mediapipe and turns them to pixel by multiplying it by width and height respectively so we can use it in cv2
+                    left_eye_points: List[List[int]] = self.stored_libraries["numpy"].array([(int(self.landmarks[i].x * w), int(self.landmarks[i].y * h)) for i in self.LEFT_EYE])
+                    right_eye_points: List[List[int]] = self.stored_libraries["numpy"].array([(int(self.landmarks[i].x * w), int(self.landmarks[i].y * h)) for i in self.RIGHT_EYE])
+                    
+                    self.avg_EAR: float = (self.calculate_EAR(left_eye_points) + self.calculate_EAR(right_eye_points)) / 2.0
+                    self.current_time: float = self.stored_libraries["time"].time()
+                    
+                    if self.avg_EAR < self.EAR_THRESHOLD:
+                        if not self.eye_closed:
+                            self.eye_closed: bool = True
+                            self.blink_start_time: float = self.current_time
+                    else:
+                        pass
+ 

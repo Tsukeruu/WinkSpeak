@@ -8,6 +8,7 @@ class Main(Main_methods):
     def run(self) -> None:
         self.initial_checks()
         self.initiate_webcam()
+        self.main_webcam()
 
 app = Main()
 app.run()
