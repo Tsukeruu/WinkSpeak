@@ -63,7 +63,9 @@ class Main_methods(Initialize):
         self.eye_closed: bool = False
         self.blink_start_time: int = 0
         self.eyes_open_start_time: float = self.stored_libraries["time"].time()
-
+            
+        self.stored_libraries["cv2"].namedWindow("test", self.stored_libraries["cv2"].WINDOW_NORMAL)
+        self.stored_libraries["cv2"].resizeWindow("test", 1280, 720)
         self.base_options = self.stored_libraries["mediapipe"].tasks.BaseOptions
 
         self.face_landmarker = self.stored_libraries["mediapipe"].tasks.vision.FaceLandmarker
@@ -83,7 +85,6 @@ class Main_methods(Initialize):
         with self.face_landmarker.create_from_options(self.final_options) as landmarker:
             while self.capture.isOpened():
                 s, f = self.capture.read() #gives us success, frame as return values, frame being the frame of webcam, s indicating success
-
                 if not s: 
                     break
 
@@ -110,5 +111,41 @@ class Main_methods(Initialize):
                             self.eye_closed: bool = True
                             self.blink_start_time: float = self.current_time
                     else:
-                        pass
- 
+                        if self.eye_closed:
+                            self.eye_closed: bool = False
+                            self.blink_duration: float = self.current_time - self.blink_start_time
+                            self.eyes_open_start_time: float = self.current_time
+                            if self.blink_duration < self.DOT_DASH_THRESHOLD:
+                                self.CURRENT_MORSE_SEQUENCE += "."
+                            else:
+                                self.CURRENT_MORSE_SEQUENCE += "-"
+                        else:
+                            self.idle_duration: float = self.current_time - self.eyes_open_start_time 
+                            if self.CURRENT_MORSE_SEQUENCE and (self.idle_duration > self.CHARACTER_PAUSE_TIME):
+                                char: str = self.morse_code_dict.get(self.CURRENT_MORSE_SEQUENCE, "?")
+                                self.DECODED_TEXT += char
+                                self.CURRENT_MORSE_SEQUENCE: str = ""
+                            elif self.idle_duration > self.SPACE_PAUSE_TIME and self.DECODED_TEXT and not self.DECODED_TEXT.endswith(" "):
+                                self.DECODED_TEXT += " "
+
+                    self.status_text: str = "CLOSED" if self.eye_closed else "OPEN"
+                    self.status_color: Any = (0,0,255) if self.eye_closed else (0, 255, 0)
+
+                    self.stored_libraries["cv2"].polylines(f, [left_eye_points], True, (0, 255, 0), 1)
+                    self.stored_libraries["cv2"].polylines(f, [right_eye_points], True, (0, 255, 0), 1)
+
+                    self.stored_libraries["cv2"].putText(f, f"EAR: {self.avg_EAR} STATUS: {self.status_text}", (30, 40), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.7, self.status_color, 2)
+
+                    self.stored_libraries["cv2"].putText(f, f"MORSE SEQUENCE: {self.CURRENT_MORSE_SEQUENCE}", (30, 80), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
+                        
+                    self.stored_libraries["cv2"].putText(f, f"TEXT SEQUENCE: {self.DECODED_TEXT}", (30, 100), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
+                    self.stored_libraries["cv2"].putText(f, f"Q TO QUIT, C TO CLEAR", (30, 120), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
+                       
+                    self.stored_libraries["cv2"].imshow("test", f)
+
+                    key = self.stored_libraries["cv2"].waitKey(1) & 0xFF
+                    if key == ord('q'):
+                        break
+                    elif key == ord('c'):
+                        self.DECODED_TEXT: str = ""
+                        self.CURRENT_MORSE_SEQUENCE: str = ""
