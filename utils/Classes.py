@@ -66,7 +66,7 @@ class Main_methods(Initialize):
         return self.EAR_VALUE
 
     def calculate_YAW(self, landmarks: List[int]) -> float:
-         """
+        """
         CALCULATE_YAW
         - A simple method that returns whether your head is turned or not based on distance from either cheek with nose
         - Creates a ratio, yaw is calculated simply because left and right distort cheek distance and is used to determine left or right
