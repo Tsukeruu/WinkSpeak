@@ -16,7 +16,7 @@ class Initialize:
             '....-': '4', '.....': '5', '-....': '6', '--...': '7', '---..': '8',
             '----.': '9'
         }
-        self.EAR_THRESHOLD: float = 0.21 # < Means eye close, otherwise >=, means open eye
+        self.EAR_THRESHOLD: float = 0.13 # < Means eye close, otherwise >=, means open eye, the good zone is usually < 0.13/0.14
         self.DOT_DASH_THRESHOLD: float = 0.4
         self.CHARACTER_PAUSE_TIME: float = 1.2
         self.SPACE_PAUSE_TIME: float = 2.5
@@ -45,7 +45,16 @@ class Initialize:
 
 
 class Main_methods(Initialize):
-    def calculate_EAR(self, eye_landmarks: List[int]) -> float: 
+    def calculate_EAR(self, eye_landmarks: List[int]) -> float:
+        """
+        CALCULATE_EAR 
+        - A simple method that calculates euclidean distance from eye points in the eye landmarks, returns an average EAR
+        - An average EAR is an indicator of how open your eye is 
+        - FORMULA:
+          - (EUCLIDEAN DISTANCE OF V1 + EUCLIDEAN DISTANCE OF V2) / 2 (to find the average of the vertical distances)
+          - then divided by the horizontal euclidean distance!
+        """
+
         #VERTICAL DISTANCE
         v1: float = self.stored_libraries["scipy"].euclidean(eye_landmarks[1], eye_landmarks[5])
         v2: float = self.stored_libraries["scipy"].euclidean(eye_landmarks[2], eye_landmarks[4])
@@ -53,8 +62,25 @@ class Main_methods(Initialize):
         #HORIZONTAL DISTANCE
         h1: float = self.stored_libraries["scipy"].euclidean(eye_landmarks[0], eye_landmarks[3])
 
-        self.EAR_VALUE: float = (v1 + v2) / (2.0 * h1)
+        self.EAR_VALUE: float = ((v1 + v2) / 2) / h1
         return self.EAR_VALUE
+
+    def calculate_YAW(self, landmarks: List[int]) -> float:
+         """
+        CALCULATE_YAW
+        - A simple method that returns whether your head is turned or not based on distance from either cheek with nose
+        - Creates a ratio, yaw is calculated simply because left and right distort cheek distance and is used to determine left or right
+        """
+
+        self.left_cheek: float = landmarks[234].x
+        self.right_cheek: float = landmarks[454].x
+        self.nose: float = landmarks[1].x
+        
+        self.face_width: float = abs(self.left_cheek - self.right_cheek)
+        
+        self.cheek_length: float = abs(self.nose - self.left_cheek) / self.face_width
+
+        return self.cheek_length
     
     def initiate_webcam(self, webcam_index: int = 0) -> None:
         #In videocapture, it starts video streaming from an index (webcams, 0 being primary)
@@ -64,8 +90,8 @@ class Main_methods(Initialize):
         self.blink_start_time: int = 0
         self.eyes_open_start_time: float = self.stored_libraries["time"].time()
             
-        self.stored_libraries["cv2"].namedWindow("test", self.stored_libraries["cv2"].WINDOW_NORMAL)
-        self.stored_libraries["cv2"].resizeWindow("test", 1280, 720)
+        self.stored_libraries["cv2"].namedWindow("WINKSPEAK V 0.0.1", self.stored_libraries["cv2"].WINDOW_NORMAL)
+        self.stored_libraries["cv2"].resizeWindow("WINKSPEAK V 0.0.1", 1280, 720)
         self.base_options = self.stored_libraries["mediapipe"].tasks.BaseOptions
 
         self.face_landmarker = self.stored_libraries["mediapipe"].tasks.vision.FaceLandmarker
@@ -106,27 +132,30 @@ class Main_methods(Initialize):
                     self.avg_EAR: float = (self.calculate_EAR(left_eye_points) + self.calculate_EAR(right_eye_points)) / 2.0
                     self.current_time: float = self.stored_libraries["time"].time()
                     
-                    if self.avg_EAR < self.EAR_THRESHOLD:
-                        if not self.eye_closed:
-                            self.eye_closed: bool = True
-                            self.blink_start_time: float = self.current_time
-                    else:
-                        if self.eye_closed:
-                            self.eye_closed: bool = False
-                            self.blink_duration: float = self.current_time - self.blink_start_time
-                            self.eyes_open_start_time: float = self.current_time
-                            if self.blink_duration < self.DOT_DASH_THRESHOLD:
-                                self.CURRENT_MORSE_SEQUENCE += "."
-                            else:
-                                self.CURRENT_MORSE_SEQUENCE += "-"
+                    if self.calculate_YAW(self.landmarks) >= 0.07 and self.calculate_YAW(self.landmarks) <= 0.8:
+                        if self.avg_EAR < self.EAR_THRESHOLD:
+                            if not self.eye_closed:
+                                self.eye_closed: bool = True
+                                self.blink_start_time: float = self.current_time
                         else:
-                            self.idle_duration: float = self.current_time - self.eyes_open_start_time 
-                            if self.CURRENT_MORSE_SEQUENCE and (self.idle_duration > self.CHARACTER_PAUSE_TIME):
-                                char: str = self.morse_code_dict.get(self.CURRENT_MORSE_SEQUENCE, "?")
-                                self.DECODED_TEXT += char
-                                self.CURRENT_MORSE_SEQUENCE: str = ""
-                            elif self.idle_duration > self.SPACE_PAUSE_TIME and self.DECODED_TEXT and not self.DECODED_TEXT.endswith(" "):
-                                self.DECODED_TEXT += " "
+                            if self.eye_closed:
+                                self.eye_closed: bool = False
+                                self.blink_duration: float = self.current_time - self.blink_start_time
+                                self.eyes_open_start_time: float = self.current_time
+                                if self.blink_duration < self.DOT_DASH_THRESHOLD:
+                                    self.CURRENT_MORSE_SEQUENCE += "."
+                                else:
+                                    self.CURRENT_MORSE_SEQUENCE += "-"
+                            else:
+                                self.idle_duration: float = self.current_time - self.eyes_open_start_time 
+                                if self.CURRENT_MORSE_SEQUENCE and (self.idle_duration > self.CHARACTER_PAUSE_TIME):
+                                    char: str = self.morse_code_dict.get(self.CURRENT_MORSE_SEQUENCE, "?")
+                                    self.DECODED_TEXT += char
+                                    self.CURRENT_MORSE_SEQUENCE: str = ""
+                                elif self.idle_duration > self.SPACE_PAUSE_TIME and self.DECODED_TEXT and not self.DECODED_TEXT.endswith(" "):
+                                    self.DECODED_TEXT += " "
+                    else:
+                        print("[!] TOO TILTED!")
 
                     self.status_text: str = "CLOSED" if self.eye_closed else "OPEN"
                     self.status_color: Any = (0,0,255) if self.eye_closed else (0, 255, 0)
@@ -134,18 +163,21 @@ class Main_methods(Initialize):
                     self.stored_libraries["cv2"].polylines(f, [left_eye_points], True, (0, 255, 0), 1)
                     self.stored_libraries["cv2"].polylines(f, [right_eye_points], True, (0, 255, 0), 1)
 
-                    self.stored_libraries["cv2"].putText(f, f"EAR: {self.avg_EAR} STATUS: {self.status_text}", (30, 40), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.7, self.status_color, 2)
+                    self.stored_libraries["cv2"].putText(f, f"EAR: {round(self.avg_EAR, 1)} STATUS: {self.status_text}", (30, 40), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.7, self.status_color, 2)
 
                     self.stored_libraries["cv2"].putText(f, f"MORSE SEQUENCE: {self.CURRENT_MORSE_SEQUENCE}", (30, 80), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
                         
                     self.stored_libraries["cv2"].putText(f, f"TEXT SEQUENCE: {self.DECODED_TEXT}", (30, 100), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
                     self.stored_libraries["cv2"].putText(f, f"Q TO QUIT, C TO CLEAR", (30, 120), self.stored_libraries["cv2"].FONT_HERSHEY_SIMPLEX, 0.8, (255,255,0), 2)
                        
-                    self.stored_libraries["cv2"].imshow("test", f)
+                    self.stored_libraries["cv2"].imshow("WINKSPEAK V 0.0.1", f)
 
-                    key = self.stored_libraries["cv2"].waitKey(1) & 0xFF
+                    key: int = self.stored_libraries["cv2"].waitKey(1) & 0xFF
+                    #Ord returns the number associated with each key / letter press, waitKey awaits keypresses
                     if key == ord('q'):
                         break
                     elif key == ord('c'):
                         self.DECODED_TEXT: str = ""
                         self.CURRENT_MORSE_SEQUENCE: str = ""
+
+
