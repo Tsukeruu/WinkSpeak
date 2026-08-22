@@ -126,7 +126,7 @@ class Main_methods(Initialize):
                     self.landmarks: List[int] = result.face_landmarks[0]
                     
                     #This uses landmarks' normalized values which is 0.0-1.0, from mediapipe and turns them to pixel by multiplying it by width and height respectively so we can use it in cv2
-                    left_eye_points: List[List[int]] = self.stored_libraries["numpy"].array([(int(self.landmarks[i].x * w), int(self.landmarks[i].y * h)) for i in self.LEFT_EYE])
+                    left_eye_points: List[List[Tuple[int,int]]] = self.stored_libraries["numpy"].array([(int(self.landmarks[i].x * w), int(self.landmarks[i].y * h)) for i in self.LEFT_EYE])
                     right_eye_points: List[List[int]] = self.stored_libraries["numpy"].array([(int(self.landmarks[i].x * w), int(self.landmarks[i].y * h)) for i in self.RIGHT_EYE])
                     
                     self.avg_EAR: float = (self.calculate_EAR(left_eye_points) + self.calculate_EAR(right_eye_points)) / 2.0
